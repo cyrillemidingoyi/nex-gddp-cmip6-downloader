@@ -76,8 +76,9 @@ BBOX_ARGS="--lat-min $LAT_MIN --lat-max $LAT_MAX --lon-min $LON_MIN --lon-max $L
 
 MAX_WORKERS=$SLURM_CPUS_PER_TASK
 
-# Paths — WORK_DIR is auto-detected from the script location
-WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# [CONFIGURE] — par défaut, le script s'exécute dans le répertoire de soumission. Adapter si besoin.
+WORK_DIR="$SLURM_SUBMIT_DIR"
+
 PYTHON=$WORK_DIR/venv_cmip6/bin/python
 SCRIPT=$WORK_DIR/cmip6_array.py
 
