@@ -209,18 +209,14 @@ def download_and_process_file(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     grid_label = MODEL_GRID_LABELS.get(model, 'gn')
-    filename_candidates = [
-        f"{variable}_day_{model}_{experiment}_{variant}_{grid_label}_{year}_v2.0.nc",
-        f"{variable}_day_{model}_{experiment}_{variant}_{grid_label}_{year}.nc",
-    ]
-    source_filename = filename_candidates[0]
+    filename = f"{variable}_day_{model}_{experiment}_{variant}_{grid_label}_{year}_v2.0.nc"
     output_filename = (f"{variable}_day_{model}_{experiment}_{variant}_{grid_label}_{year}_cropped.nc"
-                       if bbox else source_filename)
+                       if bbox else filename)
     output_path = output_dir / output_filename
 
     # Verifier si le fichier existe deja (et est valide — > 1 KB)
     pattern = (f"{variable}_day_{model}_{experiment}_{variant}_*_{year}_cropped.nc"
-               if bbox else f"{variable}_day_{model}_{experiment}_{variant}_*_{year}*.nc")
+               if bbox else f"{variable}_day_{model}_{experiment}_{variant}_*_{year}_v2.0.nc")
     existing = [p for p in output_dir.glob(pattern) if p.stat().st_size > 1024]
     if existing:
         return ('exists', year, model, experiment, variable, existing[0].stat().st_size / (1024*1024), None)
@@ -233,54 +229,35 @@ def download_and_process_file(
     try:
         # Ouverture du dataset: s3fs (lecture partielle) ou requests (telechargement complet)
         if _USE_S3FS:
-            ds = None
-            last_open_error = None
-            # Certains objets existent en *_v2.0.nc, d'autres en *.nc: essayer les 2.
-            for candidate in filename_candidates:
-                s3_path = f"nex-gddp-cmip6/NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/{candidate}"
-                try:
-                    # Ouvrir dans un context manager et materialiser en memoire AVANT de fermer la connexion S3.
-                    # xarray ouvre les datasets de facon lazy : si on ne charge pas maintenant,
-                    # to_netcdf() essaie de lire depuis S3 apres que le contexte soit ferme ou corrompu.
-                    with _fs.open(s3_path, 'rb', cache_type='blockcache') as s3f:
-                        ds_raw = xr.open_dataset(s3f, engine='h5netcdf')
-                        if float(ds_raw.lon.max()) > 180:
-                            ds_raw = ds_raw.assign_coords(lon=(((ds_raw.lon + 180) % 360) - 180)).sortby('lon')
-                        if bbox:
-                            ds_raw = ds_raw.sel(
-                                lat=slice(bbox['lat_min'], bbox['lat_max']),
-                                lon=slice(bbox['lon_min'], bbox['lon_max'])
-                            )
-                        ds_raw.load()  # materialise les chunks bbox depuis S3
-                        # Copie profonde : cree un dataset entierement en memoire,
-                        # sans aucune reference au backend h5netcdf/s3fs.
-                        # Sans ca, to_netcdf() repasse par le backend et declenche un HDF error.
-                        ds = ds_raw.copy(deep=True)
-                        ds_raw.close()
-                    source_filename = candidate
-                    break
-                except Exception as e:
-                    last_open_error = e
-            if ds is None:
-                raise last_open_error if last_open_error is not None else FileNotFoundError("No matching S3 file found")
+            s3_path = f"nex-gddp-cmip6/NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/{filename}"
+            # Ouvrir dans un context manager et materialiser en memoire AVANT de fermer la connexion S3.
+            # xarray ouvre les datasets de facon lazy : si on ne charge pas maintenant,
+            # to_netcdf() essaie de lire depuis S3 apres que le contexte soit ferme ou corrompu.
+            with _fs.open(s3_path, 'rb', cache_type='blockcache') as s3f:
+                ds_raw = xr.open_dataset(s3f, engine='h5netcdf')
+                if float(ds_raw.lon.max()) > 180:
+                    ds_raw = ds_raw.assign_coords(lon=(((ds_raw.lon + 180) % 360) - 180)).sortby('lon')
+                if bbox:
+                    ds_raw = ds_raw.sel(
+                        lat=slice(bbox['lat_min'], bbox['lat_max']),
+                        lon=slice(bbox['lon_min'], bbox['lon_max'])
+                    )
+                ds_raw.load()  # materialise les chunks bbox depuis S3
+                # Copie profonde : cree un dataset entierement en memoire,
+                # sans aucune reference au backend h5netcdf/s3fs.
+                # Sans ca, to_netcdf() repasse par le backend et declenche un HDF error.
+                ds = ds_raw.copy(deep=True)
+                ds_raw.close()
         else:
             base_url = (f"https://nex-gddp-cmip6.s3.us-west-2.amazonaws.com/"
                         f"NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/")
             with tempfile.NamedTemporaryFile(delete=False, suffix='.nc') as tmp:
                 temp_path = tmp.name
-                last_http_error = None
-                for candidate in filename_candidates:
-                    response = _session.get(base_url + candidate, stream=True, timeout=120)
-                    if response.status_code == 200:
-                        for chunk in response.iter_content(chunk_size=1024 * 1024):
-                            if chunk:
-                                tmp.write(chunk)
-                        source_filename = candidate
-                        last_http_error = None
-                        break
-                    last_http_error = requests.exceptions.HTTPError(f"{response.status_code} for {candidate}")
-                if last_http_error is not None:
-                    raise last_http_error
+                response = _session.get(base_url + filename, stream=True, timeout=120)
+                response.raise_for_status()
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        tmp.write(chunk)
             ds = xr.open_dataset(temp_path, engine='h5netcdf')
             if float(ds.lon.max()) > 180:
                 ds = ds.assign_coords(lon=(((ds.lon + 180) % 360) - 180)).sortby('lon')
@@ -289,9 +266,6 @@ def download_and_process_file(
                     lat=slice(bbox['lat_min'], bbox['lat_max']),
                     lon=slice(bbox['lon_min'], bbox['lon_max'])
                 )
-
-        if not bbox:
-            output_path = output_dir / source_filename
 
         # Conversions d'unites (appliquees sur les donnees croppees si bbox)
         if variable == 'pr':

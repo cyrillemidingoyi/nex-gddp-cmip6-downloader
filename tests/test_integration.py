@@ -58,20 +58,20 @@ class TestDownloadIntegration(unittest.TestCase):
     # ── Download status ──────────────────────────────────────────────────────
 
     def test_miroc6_historical_download(self):
-        status, *_ = _download("MIROC6", "historical", 2000, self.tmpdir)
-        self.assertIn(status, ("success", "exists"))
+        status, *rest = _download("MIROC6", "historical", 2000, self.tmpdir)
+        self.assertIn(status, ("success", "exists"), msg=f"download failed: {rest[-1]}")
 
     def test_miroc6_ssp245_download(self):
-        status, *_ = _download("MIROC6", "ssp245", 2050, self.tmpdir)
-        self.assertIn(status, ("success", "exists"))
+        status, *rest = _download("MIROC6", "ssp245", 2050, self.tmpdir)
+        self.assertIn(status, ("success", "exists"), msg=f"download failed: {rest[-1]}")
 
     def test_canesm5_historical_download(self):
-        status, *_ = _download("CanESM5", "historical", 2000, self.tmpdir)
-        self.assertIn(status, ("success", "exists"))
+        status, *rest = _download("CanESM5", "historical", 2000, self.tmpdir)
+        self.assertIn(status, ("success", "exists"), msg=f"download failed: {rest[-1]}")
 
     def test_canesm5_ssp245_download(self):
-        status, *_ = _download("CanESM5", "ssp245", 2050, self.tmpdir)
-        self.assertIn(status, ("success", "exists"))
+        status, *rest = _download("CanESM5", "ssp245", 2050, self.tmpdir)
+        self.assertIn(status, ("success", "exists"), msg=f"download failed: {rest[-1]}")
 
     # ── Output file content ──────────────────────────────────────────────────
 
