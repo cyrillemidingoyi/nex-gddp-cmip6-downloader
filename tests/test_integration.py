@@ -78,9 +78,10 @@ class TestDownloadIntegration(unittest.TestCase):
     def test_bbox_respected(self):
         """Spatial extent of output must lie within the requested bbox (+ 1 grid cell tolerance)."""
         import xarray as xr
-        _download("MIROC6", "historical", 2000, self.tmpdir)
+        status, *rest = _download("MIROC6", "historical", 2000, self.tmpdir)
+        self.assertIn(status, ("success", "exists"), msg=f"download failed: {rest[-1]}")
         files = list((self.tmpdir / "MIROC6" / "historical" / VARIABLE).glob("*.nc"))
-        self.assertTrue(files, "No output file found")
+        self.assertTrue(files, f"No output file found (status={status}, err={rest[-1]})")
         ds = xr.open_dataset(files[0], engine='h5netcdf')
         tol = 1.5  # grid-cell tolerance
         self.assertGreaterEqual(float(ds.lat.min()), BBOX["lat_min"] - tol)
@@ -92,9 +93,10 @@ class TestDownloadIntegration(unittest.TestCase):
     def test_temperature_in_celsius(self):
         """tas values must be in °C after conversion (roughly −50 to 60)."""
         import xarray as xr
-        _download("MIROC6", "historical", 2000, self.tmpdir)
+        status, *rest = _download("MIROC6", "historical", 2000, self.tmpdir)
+        self.assertIn(status, ("success", "exists"), msg=f"download failed: {rest[-1]}")
         files = list((self.tmpdir / "MIROC6" / "historical" / VARIABLE).glob("*.nc"))
-        self.assertTrue(files)
+        self.assertTrue(files, f"No output file found (status={status}, err={rest[-1]})")
         ds = xr.open_dataset(files[0], engine='h5netcdf')
         vals = ds[VARIABLE].values
         self.assertGreater(float(np.nanmin(vals)), -60.0, "Temperature too low — still in Kelvin?")
@@ -103,9 +105,10 @@ class TestDownloadIntegration(unittest.TestCase):
 
     def test_idempotent_second_call(self):
         """A second download of the same file must return status 'exists'."""
-        _download("MIROC6", "historical", 2000, self.tmpdir)  # ensure file present
-        status, *_ = _download("MIROC6", "historical", 2000, self.tmpdir)
-        self.assertEqual(status, "exists")
+        first_status, *first_rest = _download("MIROC6", "historical", 2000, self.tmpdir)  # ensure file present
+        self.assertIn(first_status, ("success", "exists"), msg=f"first download failed: {first_rest[-1]}")
+        status, *rest = _download("MIROC6", "historical", 2000, self.tmpdir)
+        self.assertEqual(status, "exists", msg=f"second download status={status}, err={rest[-1]}")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,15 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install s3fs h5netcdf xarray netCDF4 requests pytest
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            s3fs==2024.10.0 \
+            h5netcdf==1.1.0 \
+            xarray==2023.1.0 \
+            netCDF4==1.7.2 \
+            requests==2.32.3 \
+            pytest==9.0.3
 
       - name: Run unit tests
         run: pytest tests/test_cmip6.py -v
@@ -35,7 +43,16 @@ jobs:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install s3fs h5netcdf xarray netCDF4 requests pytest numpy
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            s3fs==2024.10.0 \
+            h5netcdf==1.1.0 \
+            xarray==2023.1.0 \
+            netCDF4==1.7.2 \
+            requests==2.32.3 \
+            pytest==9.0.3 \
+            numpy==1.24.4
 
       - name: Run integration tests
-        run: pytest tests/test_integration.py -v
+        run: pytest tests/test_integration.py -vv -s
