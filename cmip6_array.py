@@ -226,7 +226,8 @@ def download_and_process_file(
         # Ouverture du dataset: s3fs (lecture partielle) ou requests (telechargement complet)
         if _USE_S3FS:
             s3_path = f"nex-gddp-cmip6/NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/{filename}"
-            ds = xr.open_dataset(_fs.open(s3_path), engine='h5netcdf')
+            # blockcache supports random seek — required by HDF5/h5netcdf
+            ds = xr.open_dataset(_fs.open(s3_path, 'rb', cache_type='blockcache'), engine='h5netcdf')
         else:
             base_url = (f"https://nex-gddp-cmip6.s3.us-west-2.amazonaws.com/"
                         f"NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/")
