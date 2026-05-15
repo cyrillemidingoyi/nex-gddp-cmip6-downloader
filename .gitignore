@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv_cmip6/
+.venv/
+env/
+
+# SLURM logs
+logs/
+
+# Downloaded data — never commit NetCDF files
+*.nc
+*.fst
+
+# Conda
+.conda/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
