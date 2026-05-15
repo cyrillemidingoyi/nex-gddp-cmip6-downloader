@@ -267,7 +267,7 @@ def download_and_process_file(
                     lon=slice(bbox['lon_min'], bbox['lon_max'])
                 )
 
-        # Conversions d'unites (appliquees sur les donnees croppees si bbox)
+        # Conversions d'unites
         if variable == 'pr':
             ds[variable] = ds[variable] * 86400
             ds[variable].attrs['units'] = 'mm/day'

@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import cmip6_array
 
-
 class TestModelTables(unittest.TestCase):
     """Every model in DEFAULT_VARIANTS must have a grid label entry."""
 

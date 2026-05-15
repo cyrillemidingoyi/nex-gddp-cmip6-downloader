@@ -42,7 +42,7 @@ venv_cmip6/bin/pip install s3fs h5netcdf xarray netCDF4 requests
 
 ## Configuration
 
-Open `run_cmip6_array.sh` and edit the **three lines marked `[CONFIGURE]`**:
+Open `run_cmip6_array.sh` and edit the **lines marked `[CONFIGURE]`**:
 
 ```bash
 #SBATCH --partition cpu-dedicated     # [CONFIGURE] your cluster partition
