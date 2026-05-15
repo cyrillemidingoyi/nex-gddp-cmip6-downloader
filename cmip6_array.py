@@ -214,12 +214,16 @@ def download_and_process_file(
                        if bbox else filename)
     output_path = output_dir / output_filename
 
-    # Verifier si le fichier existe deja
+    # Verifier si le fichier existe deja (et est valide — > 1 KB)
     pattern = (f"{variable}_day_{model}_{experiment}_{variant}_*_{year}_cropped.nc"
                if bbox else f"{variable}_day_{model}_{experiment}_{variant}_*_{year}_v2.0.nc")
-    existing = list(output_dir.glob(pattern))
+    existing = [p for p in output_dir.glob(pattern) if p.stat().st_size > 1024]
     if existing:
         return ('exists', year, model, experiment, variable, existing[0].stat().st_size / (1024*1024), None)
+    # Supprimer les stubs corrompus (<= 1 KB) laisses par un run precedent echoue
+    for stub in output_dir.glob(pattern):
+        if stub.stat().st_size <= 1024:
+            stub.unlink(missing_ok=True)
 
     temp_path = None
     try:
