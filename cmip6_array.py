@@ -230,8 +230,24 @@ def download_and_process_file(
         # Ouverture du dataset: s3fs (lecture partielle) ou requests (telechargement complet)
         if _USE_S3FS:
             s3_path = f"nex-gddp-cmip6/NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/{filename}"
-            # blockcache supports random seek — required by HDF5/h5netcdf
-            ds = xr.open_dataset(_fs.open(s3_path, 'rb', cache_type='blockcache'), engine='h5netcdf')
+            # Ouvrir dans un context manager et materialiser en memoire AVANT de fermer la connexion S3.
+            # xarray ouvre les datasets de facon lazy : si on ne charge pas maintenant,
+            # to_netcdf() essaie de lire depuis S3 apres que le contexte soit ferme ou corrompu.
+            with _fs.open(s3_path, 'rb', cache_type='blockcache') as s3f:
+                ds_raw = xr.open_dataset(s3f, engine='h5netcdf')
+                if float(ds_raw.lon.max()) > 180:
+                    ds_raw = ds_raw.assign_coords(lon=(((ds_raw.lon + 180) % 360) - 180)).sortby('lon')
+                if bbox:
+                    ds_raw = ds_raw.sel(
+                        lat=slice(bbox['lat_min'], bbox['lat_max']),
+                        lon=slice(bbox['lon_min'], bbox['lon_max'])
+                    )
+                ds_raw.load()  # materialise les chunks bbox depuis S3
+                # Copie profonde : cree un dataset entierement en memoire,
+                # sans aucune reference au backend h5netcdf/s3fs.
+                # Sans ca, to_netcdf() repasse par le backend et declenche un HDF error.
+                ds = ds_raw.copy(deep=True)
+                ds_raw.close()
         else:
             base_url = (f"https://nex-gddp-cmip6.s3.us-west-2.amazonaws.com/"
                         f"NEX-GDDP-CMIP6/{model}/{experiment}/{variant}/{variable}/")
@@ -242,18 +258,14 @@ def download_and_process_file(
                 for chunk in response.iter_content(chunk_size=1024 * 1024):
                     if chunk:
                         tmp.write(chunk)
-            ds = xr.open_dataset(temp_path, engine='netcdf4')
-
-        # Correction convention longitude
-        if float(ds.lon.max()) > 180:
-            ds = ds.assign_coords(lon=(((ds.lon + 180) % 360) - 180)).sortby('lon')
-
-        # Crop EN PREMIER: reduit les donnees chargees depuis S3 / en memoire
-        if bbox:
-            ds = ds.sel(
-                lat=slice(bbox['lat_min'], bbox['lat_max']),
-                lon=slice(bbox['lon_min'], bbox['lon_max'])
-            )
+            ds = xr.open_dataset(temp_path, engine='h5netcdf')
+            if float(ds.lon.max()) > 180:
+                ds = ds.assign_coords(lon=(((ds.lon + 180) % 360) - 180)).sortby('lon')
+            if bbox:
+                ds = ds.sel(
+                    lat=slice(bbox['lat_min'], bbox['lat_max']),
+                    lon=slice(bbox['lon_min'], bbox['lon_max'])
+                )
 
         # Conversions d'unites (appliquees sur les donnees croppees si bbox)
         if variable == 'pr':
@@ -269,8 +281,9 @@ def download_and_process_file(
             ds[variable] = ds[variable] * 0.0864
             ds[variable].attrs['units'] = 'MJ/m2/day'
 
-        encoding = {var: {'zlib': True, 'complevel': 4} for var in ds.data_vars}
-        ds.to_netcdf(output_path, encoding=encoding)
+        # h5netcdf engine pour eviter le conflit de libhdf5 entre h5py et netcdf4-python
+        encoding = {var: {'compression': 'gzip', 'compression_opts': 4} for var in ds.data_vars}
+        ds.to_netcdf(output_path, engine='h5netcdf', encoding=encoding)
         ds.close()
         del ds
 

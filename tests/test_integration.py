@@ -81,7 +81,7 @@ class TestDownloadIntegration(unittest.TestCase):
         _download("MIROC6", "historical", 2000, self.tmpdir)
         files = list((self.tmpdir / "MIROC6" / "historical" / VARIABLE).glob("*.nc"))
         self.assertTrue(files, "No output file found")
-        ds = xr.open_dataset(files[0])
+        ds = xr.open_dataset(files[0], engine='h5netcdf')
         tol = 1.5  # grid-cell tolerance
         self.assertGreaterEqual(float(ds.lat.min()), BBOX["lat_min"] - tol)
         self.assertLessEqual(float(ds.lat.max()),    BBOX["lat_max"] + tol)
@@ -95,7 +95,7 @@ class TestDownloadIntegration(unittest.TestCase):
         _download("MIROC6", "historical", 2000, self.tmpdir)
         files = list((self.tmpdir / "MIROC6" / "historical" / VARIABLE).glob("*.nc"))
         self.assertTrue(files)
-        ds = xr.open_dataset(files[0])
+        ds = xr.open_dataset(files[0], engine='h5netcdf')
         vals = ds[VARIABLE].values
         self.assertGreater(float(np.nanmin(vals)), -60.0, "Temperature too low — still in Kelvin?")
         self.assertLess(float(np.nanmax(vals)),     60.0, "Temperature unexpectedly high")
